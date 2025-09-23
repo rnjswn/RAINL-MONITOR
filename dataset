@@ -1,0 +1,81 @@
+import pandas as pd
+import random
+import string
+
+# --- 설정: KTX #123 열차 운행 정보 ---
+STATIONS = ["서울", "광명", "천안아산", "오송", "대전", "김천구미", "동대구", "부산"]
+NUM_CARS = 8  # 총 호차 수
+SEATS_PER_CAR_ROWS = 15  # 호차당 좌석 열
+SEATS_PER_CAR_COLS = "ABCD" # 호차당 좌석 종류 (A, B, C, D)
+OUTPUT_FILENAME = 'reservations.xlsx'
+
+def is_overlap(segment1, segment2, stations_map):
+    """두 구간이 겹치는지 확인하는 함수"""
+    start1, end1 = stations_map[segment1[0]], stations_map[segment1[1]]
+    start2, end2 = stations_map[segment2[0]], stations_map[segment2[1]]
+    # max(시작점들) < min(종착점들) 이면 겹치는 구간이 존재함
+    return max(start1, start2) < min(end1, end2)
+
+def generate_ktx123_reservations():
+    """KTX #123 열차의 현실적인 구간별 예매 데이터를 생성합니다."""
+    
+    stations_map = {station: i for i, station in enumerate(STATIONS)}
+    all_seats = {}
+    
+    # 1. 모든 좌석 정보 초기화
+    for car in range(1, NUM_CARS + 1):
+        for row in range(1, SEATS_PER_CAR_ROWS + 1):
+            for col in SEATS_PER_CAR_COLS:
+                seat_no = f"{row}{col}"
+                # 각 좌석에 예매된 구간들을 저장할 리스트를 만듦
+                all_seats[(car, seat_no)] = []
+
+    final_reservations = []
+
+    # 2. 모든 좌석을 순회하며 랜덤하게 예매 기록 생성
+    for (car_no, seat_no), booked_segments in all_seats.items():
+        
+        # 각 좌석에 1~3개의 예매 기록을 랜덤하게 생성 시도
+        num_bookings_to_try = random.randint(1, 3)
+        
+        for _ in range(num_bookings_to_try):
+            # 3. 출발역과 도착역 랜덤 선택 (구간이 있도록)
+            start_index = random.randint(0, len(STATIONS) - 2)
+            end_index = random.randint(start_index + 1, len(STATIONS) - 1)
+            new_segment = (STATIONS[start_index], STATIONS[end_index])
+
+            # 4. 이 좌석에 이미 있는 예매 구간들과 겹치는지 확인
+            is_creatable = True
+            for existing_segment in booked_segments:
+                if is_overlap(new_segment, existing_segment, stations_map):
+                    is_creatable = False
+                    break
+            
+            # 5. 겹치지 않으면, 새로운 예매 기록으로 추가
+            if is_creatable:
+                booked_segments.append(new_segment)
+                final_reservations.append({
+                    'car_no': car_no,
+                    'seat_no': seat_no,
+                    'user_id': f"user{random.randint(1000, 9999)}",
+                    'departure_station': new_segment[0],
+                    'arrival_station': new_segment[1]
+                })
+
+    return pd.DataFrame(final_reservations)
+
+def main():
+    """메인 실행 함수"""
+    print("KTX #123 열차의 가상 예매 데이터 생성을 시작합니다...")
+
+    reservations_df = generate_ktx123_reservations()
+    
+    # 생성된 데이터를 엑셀 파일에 저장 (가독성을 위해 좌석 순서대로 정렬)
+    reservations_df_sorted = reservations_df.sort_values(by=['car_no', 'seat_no']).reset_index(drop=True)
+    reservations_df_sorted.to_excel(OUTPUT_FILENAME, sheet_name='reservations', index=False)
+
+    print(f"'{OUTPUT_FILENAME}' 파일이 성공적으로 생성되었습니다.")
+    print(f" - 총 예매 데이터: {len(reservations_df_sorted)}건")
+
+if __name__ == "__main__":
+    main()
