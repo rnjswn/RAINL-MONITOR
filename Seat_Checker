@@ -1,0 +1,116 @@
+import pandas as pd
+import string
+
+INPUT_FILENAME = 'reservations.xlsx'
+STATIONS = ["서울", "광명", "천안아산", "오송", "대전", "김천구미", "동대구", "부산"]
+NUM_CARS = 8
+SEATS_PER_CAR_ROWS = 15
+SEATS_PER_CAR_COLS = "ABCD"
+
+
+def load_seat_data():
+    """CSV 파일을 읽어 좌석별 예매 정보를 딕셔너리 형태로 가공합니다."""
+    try:
+        df = pd.read_excel(INPUT_FILENAME)
+    except FileNotFoundError:
+        print(f"에러: '{INPUT_FILENAME}' 파일을 찾을 수 없습니다.")
+        return None
+
+    seat_reservations = {}
+    for record in df.to_dict('records'):
+        seat_key = f"{record['car_no']}-{record['seat_no']}"
+        if seat_key not in seat_reservations:
+            seat_reservations[seat_key] = []
+        seat_reservations[seat_key].append({
+            "departure": record['departure_station'],
+            "arrival": record['arrival_station']
+        })
+    return seat_reservations
+
+def check_seat_reservation(all_seat_data, current_station, next_station, car_no, seat_no, stations_map):
+    """특정 구간에서 좌석이 예매되었는지 확인합니다."""
+    seat_key = f"{car_no}-{seat_no}"
+    current_idx = stations_map.get(current_station, -1)
+    next_idx = stations_map.get(next_station, -1)
+
+    if seat_key in all_seat_data:
+        for booking in all_seat_data[seat_key]:
+            departure_idx = stations_map.get(booking['departure'], -1)
+            arrival_idx = stations_map.get(booking['arrival'], -1)
+            if departure_idx <= current_idx and next_idx <= arrival_idx:
+                return True # 예매됨
+    return False # 예매되지 않음 (빈 좌석)
+
+
+def simulate_api_request(seat_data, stations_map):
+    """
+    [기능 1] API 요청을 시뮬레이션하여 특정 좌석의 예매 상태를 출력합니다.
+    """
+    print("\n" + "#"*50)
+    print("### 기능 1: 실시간 좌석 확인 (API 시뮬레이션)")
+    print("#"*50)
+    
+    current = "대전"
+    next_st = "김천구미"
+    car = 5
+    seat = "7A"
+
+    is_reserved = check_seat_reservation(seat_data, current, next_st, car, seat, stations_map)
+
+    if is_reserved:
+        print(f"✔️ 결과: {car}호차 {seat} 좌석은 현재 구간({current} -> {next_st})에 예매된 승객이 있습니다.")
+    else:
+        print(f"🚨 결과: {car}호차 {seat} 좌석은 현재 구간({current} -> {next_st})에 예매 기록이 없습니다! (무임승차 의심)")
+
+def find_all_empty_seats(seat_data, stations_map):
+    """
+    [기능 2] 각 운행 구간별로 비어있는 모든 좌석을 검색하여 출력합니다.
+    """
+    print("\n" + "#"*50)
+    print("### 기능 2: 전체 구간별 빈 좌석 검색")
+    print("#"*50)
+
+    all_possible_seats = []
+    for car in range(1, NUM_CARS + 1):
+        for row in range(1, SEATS_PER_CAR_ROWS + 1):
+            for col in SEATS_PER_CAR_COLS:
+                all_possible_seats.append((car, f"{row}{col}"))
+
+    for i in range(len(STATIONS) - 1):
+        current_station = STATIONS[i]
+        next_station = STATIONS[i+1]
+        
+        empty_seats_in_segment = []
+        for car_no, seat_no in all_possible_seats:
+            if not check_seat_reservation(seat_data, current_station, next_station, car_no, seat_no, stations_map):
+                empty_seats_in_segment.append(f"{car_no}-{seat_no}")
+        
+        print("\n" + "="*50)
+        print(f"🛤️  구간: {current_station} -> {next_station}")
+        print(f"✅ 빈 좌석 수: {len(empty_seats_in_segment)} 석")
+        if len(empty_seats_in_segment) > 10:
+             print(f"🪑 빈 좌석 목록 (일부): {', '.join(empty_seats_in_segment[:10])} 등")
+        else:
+             print(f"🪑 빈 좌석 목록: {', '.join(empty_seats_in_segment)}")
+        print("="*50)
+
+# --- 메인 실행 부분 ---
+
+def main():
+    """메인 실행 함수"""
+    # 1. (공통) 데이터를 메모리에 로드
+    seat_data = load_seat_data()
+    if not seat_data:
+        return
+
+    # 2. (공통) stations_map을 한 번만 생성하여 재사용
+    stations_map = {station: i for i, station in enumerate(STATIONS)}
+    print("✅ 데이터 로드 및 'stations_map' 생성이 완료되었습니다.")
+
+    # 3. 각 기능 함수를 순서대로 호출
+    simulate_api_request(seat_data, stations_map)
+    find_all_empty_seats(seat_data, stations_map)
+
+
+if __name__ == "__main__":
+    main()
